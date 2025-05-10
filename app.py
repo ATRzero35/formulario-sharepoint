@@ -51,5 +51,6 @@ def submit():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 10000))  # Usa porta do Render ou 10000 local
+    app.run(host='0.0.0.0', port=port)  # OBRIGATÓRIO '0.0.0.0'
