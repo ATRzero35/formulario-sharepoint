@@ -2,55 +2,59 @@ from flask import Flask, request, jsonify
 from shareplum import Site, Office365
 from datetime import datetime
 import os
+import logging
 
 app = Flask(__name__)
 
-# Configurações do SharePoint (substitua com seus dados)
-SHAREPOINT_URL = "https://cevalogisticsoffice365-my.sharepoint.com"  # URL base do SharePoint
-SHAREPOINT_SITE = "/personal/ext_hercules_souza_cruz_cevalogistics_com/Lists/"             # Caminho do site
-SHAREPOINT_LIST = "FormularioApp"                 # Nome da lista
-USERNAME = os.getenv("SHAREPOINT_USER")           # E-mail corporativo
-PASSWORD = os.getenv("SHAREPOINT_PASS")           # Senha
+# Configura logging extensivo
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
-def conectar_sharepoint():
-    auth = Office365(SHAREPOINT_URL, username=USERNAME, password=PASSWORD).GetCookies()
-    return Site(SHAREPOINT_SITE, auth=auth)
-
-@app.route("/submit", methods=["POST"])
+@app.route('/submit', methods=['POST'])
 def submit():
     try:
-        # Dados do formulário
-        dados = request.json
-        nome = dados.get("nome")
-        operacao = dados.get("operacao")  # "OPCAO1" ou "OPCAO2"
+        # Log de entrada
+        logger.debug(f"Dados recebidos: {request.json}")
         
-        # Conexão com SharePoint
-        site = conectar_sharepoint()
-        lista = site.List(SHAREPOINT_LIST)
+        # Validação básica
+        if not request.is_json:
+            return jsonify({"error": "Envie JSON no header 'Content-Type: application/json'"}), 400
+            
+        data = request.get_json()
         
-        # 1. Buscar último contador
-        itens = lista.GetListItems()
-        ultimo_contador = max([int(item["Contador"]) for item in itens if item.get("Contador")]) if itens else 0
-        
-        # 2. Gerar ID único (OPCAOX-XXXX)
-        novo_contador = ultimo_contador + 1
-        id_unico = f"{operacao}-{novo_contador:04d}"  # Formato: OPCAO1-0001
+        # Conexão DEBUG - remova após testes
+        logger.debug("Tentando conectar ao SharePoint...")
+        try:
+            auth = Office365(
+                os.getenv("SHAREPOINT_URL"),
+                username=os.getenv("SHAREPOINT_USER"),
+                password=os.getenv("SHAREPOINT_PASS")
+            ).GetCookies()
+            site = Site(os.getenv("SHAREPOINT_SITE"), auth=auth)
+            lista = site.List('FormularioApp')
+            logger.debug("Conexão OK!")
+        except Exception as e:
+            logger.error(f"ERRO SharePoint: {str(e)}")
+            return jsonify({"error": "Falha na conexão com SharePoint"}), 500
+
+        # Processamento
+        novo_id = f"TEST-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         
         # 3. Salvar no SharePoint
         lista.UpdateListItems(data=[{
-            "Title": id_unico,  # Campo obrigatório
-            "Nome": nome,
-            "Operacao": operacao,
-            "DataEnvio": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "IDUnico": id_unico,
-            "Contador": novo_contador
+            "Title": novo_id,
+            "Nome": data.get('nome', 'Teste'),
+            "Operacao": data.get('operacao', 'OPCAO1'),
+            "DataEnvio": datetime.now().strftime('%Y-%m-%dT%H:%M:%SZ'),
+            "IDUnico": novo_id
         }], kind="New")
-        
-        return jsonify({"success": True, "id_unico": id_unico})
-    
+
+        return jsonify({"success": True, "id_unico": novo_id})
+
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        logger.exception("ERRO INTERNO:")
+        return jsonify({"error": "Erro no servidor"}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))  # Usa porta do Render ou 10000 local
-    app.run(host='0.0.0.0', port=port)  # OBRIGATÓRIO '0.0.0.0'
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
