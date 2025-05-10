@@ -43,7 +43,7 @@ class FormApp(App):
         }
         
         UrlRequest(
-            "http://localhost:5000/submit",  # Substitua pela URL da API hospedada
+            "https://formulario-api-hyc8.onrender.com",  # Substitua pela URL da API hospedada
             on_success=self.sucesso,
             on_failure=self.erro,
             req_body=json.dumps(dados),
